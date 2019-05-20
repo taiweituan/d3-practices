@@ -41,13 +41,14 @@ data = csvToTree(bubbleSvg, data);
 
 // processing data
 var bubbleChrt = bubbleChartVis();
-// var barChart = BarChartVis();
+var barChart = BarChartVis();
 
 bubbleChrt.drawBubbleChart(bubbleSvg, data);
 
-// bubbleChrt.dispatch.on("selected",function(selectedPath) { 
-//     barChart.drawBarChart(barSvg,getSiblingData(data,selectedPath)) 
-// });
+bubbleChrt.dispatch.on("selected",function(selectedPath) {
+    console.log(selectedPath);
+    barChart.drawBarChart(barSvg, getSiblingData(data, selectedPath)) 
+});
 
 
 // ******************************************
@@ -78,7 +79,8 @@ function bubbleChartVis() {
                 .selectAll("g")
                 .data(d => d.values)
                 .join("g")
-                .attr("transform", d => `translate(${d.x + 1},${d.y + 1})`);
+                .attr("transform", d => `translate(${d.x + 1},${d.y + 1})`)
+                .on("click", function(d) {newBubbleChart.dispatch.call("selected", {}, d.data.data.path); });
 
             node.append("circle")
                 .attr("r", d => d.r)
@@ -106,6 +108,7 @@ function BarChartVis() {
     var newBC = {
         // data should have form [ {label: "", value: #}]
         drawBarChart: function(svg, data) {
+            
             var width = +svg.attr("width"),
                 height = +svg.attr("height");
 
@@ -142,6 +145,9 @@ function BarChartVis() {
 }
 
 function getSiblingData(node, searchStr) {
+    console.log(searchStr);
+    console.log(`log children length ${node.children.length}`);
+    
     // separate the piece of the search path we're looking for from the rest
     var firstSep = searchStr.indexOf("/");
     var remainder = searchStr.substring(firstSep + 1);
@@ -152,7 +158,11 @@ function getSiblingData(node, searchStr) {
         var child = node.children[iChild];
         var lastChildSplit = child.data.path.split("/").slice(-1)[0];
         if (lastChildSplit == searchChild) {
-            if (child.children) { return getSiblingData(child, remainder); }
+            if (child.children) { 
+                console.log(remainder);
+                
+                return getSiblingData(child, remainder); 
+            }
             else {
                 return node.children.map( (child) => ({label:child.id, value:child.data.size}) )
             }
