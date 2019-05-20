@@ -20,9 +20,8 @@
 
 <script src="https://d3js.org/d3.v5.min.js"></script>
 <script src="./d3codetree.csv.js"></script>
-<script src="./utilties.js"></script>
-<!-- <script src="./bubbleChart.js"></script> -->
 <script>
+
 // ******************************************
 // JS Starts here
 // ******************************************
@@ -36,64 +35,65 @@ var data = d3.csvParse(d3CodeTreeCSVText,
     function(d) {
         d.size = +d.size;
         return d;
-});    
-data = csvToBubble(bubbleSvg, data);
-
-// processing data
-var barChart = BarChartVis();
-var bubbleChrt = bubbleChartVis();
-bubbleChrt.drawBubbleChart(bubbleSvg, data);
-
-bubbleChrt.dispatch.on("selected",function(selectedPath) { 
-    barChart.drawBarChart(barSvg,getSiblingData(data,selectedPath)) 
 });
 
+data = csvToTree(bubbleSvg, data);
 
+// processing data
+var bubbleChrt = bubbleChartVis();
+// var barChart = BarChartVis();
+
+bubbleChrt.drawBubbleChart(bubbleSvg, data);
+
+// bubbleChrt.dispatch.on("selected",function(selectedPath) { 
+//     barChart.drawBarChart(barSvg,getSiblingData(data,selectedPath)) 
+// });
+
+
+// ******************************************
+// End of main()
+// ******************************************
 
 function bubbleChartVis() {
     var newBubbleChart ={
-        drawBubbleChart: function(svg, root) {
+        drawBubbleChart: function(svg, data) {
             var width = +svg.attr("width"),
                 height = +svg.attr("height");
+
+            var pack = (data) => d3.pack()
+                    .size([width - 2, height - 2])
+                    .padding(3)(d3.hierarchy(data)
+                    .sum(d => d.value)
+                    .sort((a, b) => b.value - a.value));            
+            
             var color = d3.scaleOrdinal(d3.schemeCategory10);
             var format = d3.format(",d");
             
             // beginning of bubbles
-            var leaf = svg.selectAll("a")
-                .data(root.leaves())
-                .join("a")
-                .attr("transform", d => `translate(${d.x + 1},${d.y + 1})`)
-                .on("click", function(d) {
-                    return newBubbleChart.dispatch.call("selected", {}, d.data.path); 
-                });
-            
+            var root = pack(data);
+            const node = svg.selectAll("g")
+                .data(d3.nest().key(d => d.height).entries(root.descendants()))
+                .join("g")
+                // .attr("filter", shadow)
+                .selectAll("g")
+                .data(d => d.values)
+                .join("g")
+                .attr("transform", d => `translate(${d.x + 1},${d.y + 1})`);
 
-            leaf.append("circle")
-                .attr("id", d => { return `circle-${d.data.size}`})
+            node.append("circle")
                 .attr("r", d => d.r)
-                .attr("fill-opacity", 0.7)
-                .attr("fill", function(d) { 
-                    var a = d.ancestors(); 
-                    return color(a[0].data.path); 
-                });
-
-            leaf.append("clipPath")
-                .attr("id", d => {return `clip-${d.data.size}`})
-                .append("use");
-                // .attr("xlink:href", d => d.leafUid.href);
-
+                .attr("fill", d => color(d.height));
+                
+            const leaf = node.filter(d => !d.children);
             leaf.append("text")
-                .attr("clip-path", d => {return `clip-${d.data.size}`})
+                .attr("clip-path", d => d.clipUid)
                 .attr("text-anchor", "middle")
                 .selectAll("tspan")
-                .data(d => d.data.path.split("/").slice(-2))
+                .data(d => d.data.data.path.split(/(?=[A-Z][^A-Z])/g))
                 .join("tspan")
                 .attr("x", 0)
                 .attr("y", (d, i, nodes) => `${i - nodes.length / 2 + 0.8}em`)
-                .text(d => d);
-            
-            leaf.append("title")
-                .text(d => `${d.data.title}\n${format(d.value)}`);
+                .text(d =>  { return d.substring(d.lastIndexOf("/") + 1, d.lastIndexOf(".")); });
         },
         dispatch: d3.dispatch("selected")
 
@@ -141,25 +141,6 @@ function BarChartVis() {
     return newBC;
 }
 
-
-function csvToBubble(svg, data) {
-    console.log(data);
-    
-    var width = +svg.attr("width"),
-        height = +svg.attr("height");
-
-
-    var result = d3.pack()
-        .size([width - 2, height - 2])
-        .padding(2)(d3.hierarchy({children: data})
-        .sum(d => d.size))
-        .sort(function(a, b) { return b.value - a.value; });
-    console.log(result);
-    
-    return result;
-}
-
-
 function getSiblingData(node, searchStr) {
     // separate the piece of the search path we're looking for from the rest
     var firstSep = searchStr.indexOf("/");
@@ -177,6 +158,19 @@ function getSiblingData(node, searchStr) {
             }
         }
     }
+}
+
+function csvToTree(svg, csvData) {   
+    var width = +svg.attr("width"),
+        height = +svg.attr("height");
+
+    var root = d3.stratify()
+        .id(function(d) { return d.path; })
+        .parentId(function(d) { return d.path.substring(0, d.path.lastIndexOf("/")); })
+        (csvData)
+        .sum(function(d) { return d.size; })
+        .sort(function(a, b) { return b.height - a.height || b.value - a.value; });            
+    return root;
 }
 
 
